@@ -6,10 +6,10 @@
 
 项目已配置 GitHub Actions。推送到 GitHub 仓库的 `main` 分支后，会自动构建并发布到 GitHub Pages。
 
-发布后访问地址通常是：
+发布后访问地址为：
 
 ```text
-https://<github-username>.github.io/<repo-name>/
+https://jacksonup.github.io/OA/
 ```
 
 ## 本地运行
@@ -48,13 +48,10 @@ npm run build
 gh auth login -h github.com
 ```
 
-2. 在当前目录初始化并推送仓库：
+2. 在当前目录推送仓库：
 
 ```bash
-git init
-git add .
-git commit -m "init oa prototype"
-gh repo create oa-prototype --public --source=. --remote=origin --push
+git push -u origin main
 ```
 
 3. 进入 GitHub 仓库页面，打开 `Settings > Pages`，确认 Source 使用 `GitHub Actions`。
