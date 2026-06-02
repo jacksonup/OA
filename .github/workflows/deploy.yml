@@ -27,13 +27,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: oa-ui/package-lock.json
+          node-version: 22
 
       - name: Install dependencies
         working-directory: oa-ui
-        run: npm install --include=dev --no-audit --no-fund --progress=false
+        run: |
+          npm install -g npm@10.8.2
+          npm ci --no-audit --no-fund --progress=false
 
       - name: Build
         working-directory: oa-ui
