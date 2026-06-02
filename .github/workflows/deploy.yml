@@ -33,7 +33,7 @@ jobs:
         working-directory: oa-ui
         run: |
           npm install -g npm@10.8.2
-          npm ci --no-audit --no-fund --progress=false
+          npm install --no-audit --no-fund --progress=false
 
       - name: Build
         working-directory: oa-ui
