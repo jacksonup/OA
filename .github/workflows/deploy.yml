@@ -30,7 +30,8 @@ jobs:
       - name: Install dependencies
         working-directory: oa-ui
         run: |
-          rm -f .npmrc
+          rm -f .npmrc package-lock.json
+          npm install -g npm@10.8.2
           npm install --registry=https://registry.npmjs.org/ --no-audit --no-fund --progress=false
 
       - name: Build
