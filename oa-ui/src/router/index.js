@@ -52,6 +52,18 @@ const routes = [
         name: 'PositionList',
         component: () => import('../views/position/PositionList.vue'),
         meta: { title: '岗位管理' }
+      },
+      {
+        path: 'attendance',
+        name: 'AttendanceList',
+        component: () => import('../views/attendance/AttendanceList.vue'),
+        meta: { title: '考勤管理' }
+      },
+      {
+        path: 'salary/month',
+        name: 'SalaryList',
+        component: () => import('../views/attendance/SalaryList.vue'),
+        meta: { title: '月度薪酬核算' }
       }
     ]
   }

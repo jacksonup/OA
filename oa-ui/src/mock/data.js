@@ -105,3 +105,101 @@ export function deletePosition(id) {
   const idx = positions.findIndex(p => p.id === id)
   if (idx !== -1) positions.splice(idx, 1)
 }
+
+// --- 考勤 Mock ---
+export const attendanceRecords = reactive({})
+
+function ensureAttendance() {
+  if (Object.keys(attendanceRecords).length > 0) return
+  users.forEach((user, index) => {
+    for (let m = 1; m <= 6; m++) {
+      const key = `${user.id}-2026-${String(m).padStart(2, '0')}`
+      const baseAttendance = [22, 21, 23, 20, 22, 21][m - 1]
+      const personalLeave = (index + m) % 5 === 0 ? 1 : (index + m) % 7 === 0 ? 2 : 0
+      const sickLeave = (index + m) % 6 === 0 ? 2 : (index + m) % 9 === 0 ? 1 : 0
+      const annualLeave = m >= 3 && (index + m) % 4 === 0 ? 3 : m >= 5 && index % 3 === 0 ? 5 : 0
+      const compLeave = (index + m) % 3 === 0 ? 1 : 0
+      const actualAttendance = Math.max(0, baseAttendance - personalLeave - sickLeave - annualLeave)
+      const deduction = personalLeave > 0 ? personalLeave * 200 : sickLeave > 0 ? sickLeave * 100 : 0
+      attendanceRecords[key] = {
+        userId: user.id, year: 2026, month: String(m).padStart(2, '0'), attendance: actualAttendance,
+        compensatoryLeave: compLeave, personalLeave, sickLeave, annualLeave,
+        deduction, remark: personalLeave > 0 ? `${personalLeave}天事假扣款` : sickLeave > 0 ? `${sickLeave}天病假` : ''
+      }
+    }
+  })
+}
+
+export function getAttendance(userId, year, month) {
+  ensureAttendance()
+  return attendanceRecords[`${userId}-${year}-${month}`] || null
+}
+
+export function getAttendanceOrEmpty(userId, year, month) {
+  return getAttendance(userId, year, month) || {
+    userId, year, month, attendance: 0, compensatoryLeave: 0,
+    personalLeave: 0, sickLeave: 0, annualLeave: 0, deduction: 0, remark: ''
+  }
+}
+
+export function getYearCumulativeLeave(userId, year) {
+  ensureAttendance()
+  let total = 0
+  for (let m = 1; m <= 12; m++) {
+    const r = attendanceRecords[`${userId}-${year}-${String(m).padStart(2, '0')}`]
+    if (r) total += r.personalLeave + r.sickLeave + r.annualLeave + r.compensatoryLeave
+  }
+  return total
+}
+
+export function getMonthDeduction(userId, year, month) {
+  const r = getAttendance(userId, year, month)
+  return r ? r.deduction : 0
+}
+
+// --- 薪酬 Mock ---
+export const salaryRecords = reactive({})
+
+function ensureSalary() {
+  if (Object.keys(salaryRecords).length > 0) return
+  users.forEach((user, index) => {
+    for (let m = 1; m <= 6; m++) {
+      const key = `${user.id}-2026-${String(m).padStart(2, '0')}`
+      const baseSalary = 9000 + index * 500
+      const positionPerformance = [1500, 2000, 2500, 3000, 3500, 4000, 1800, 2200, 1600, 2000, 1500, 2800][index]
+      const travelAllowance = (index + m) % 3 === 0 ? 800 : (index + m) % 4 === 0 ? 1200 : 0
+      const deduction = getMonthDeduction(user.id, 2026, String(m).padStart(2, '0'))
+      const netPay = baseSalary + positionPerformance + travelAllowance - deduction
+      salaryRecords[key] = {
+        userId: user.id, year: 2026, month: String(m).padStart(2, '0'),
+        baseSalary, positionPerformance, travelAllowance, deduction, netPay,
+        remark: deduction > 0 ? '含考勤扣款' : ''
+      }
+    }
+  })
+}
+
+export function getSalary(userId, year, month) {
+  ensureSalary()
+  return salaryRecords[`${userId}-${year}-${month}`] || null
+}
+
+export function getSalaryOrEmpty(userId, year, month) {
+  const existing = getSalary(userId, year, month)
+  if (existing) return existing
+  const bs = users.find(u => u.id === userId)
+  const baseSalary = bs ? (9000 + (userId - 1) * 500) : 0
+  const deduction = getMonthDeduction(userId, year, month)
+  return {
+    userId, year, month, baseSalary, positionPerformance: 0,
+    travelAllowance: 0, deduction, netPay: baseSalary - deduction, remark: ''
+  }
+}
+
+export const salaryMonths = (() => {
+  const months = []
+  for (let m = 1; m <= 6; m++) {
+    months.push({ value: `2026-${String(m).padStart(2, '0')}`, label: `2026年${String(m).padStart(2, '0')}月` })
+  }
+  return months
+})()

@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   User, OfficeBuilding, Briefcase, Fold, Expand,
-  Star, Medal, Trophy, School, Phone
+  Star, Medal, Trophy, School, Phone, Timer, Money
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -24,7 +24,16 @@ const menuItems = [
     ]
   },
   { path: '/department', title: '项目部管理', icon: OfficeBuilding },
-  { path: '/position', title: '岗位管理', icon: Briefcase }
+  { path: '/position', title: '岗位管理', icon: Briefcase },
+  {
+    path: '/salary',
+    title: '薪酬管理',
+    icon: Money,
+    children: [
+      { path: '/attendance', title: '考勤管理', icon: Timer },
+      { path: '/salary/month', title: '月度薪酬核算', icon: Money }
+    ]
+  }
 ]
 
 const activeMenu = computed(() => route.path)
@@ -48,7 +57,7 @@ function onMenuSelect(path) {
         background-color="transparent"
         text-color="var(--ios-text-secondary)"
         active-text-color="var(--ios-blue)"
-        :default-openeds="['/user']"
+        :default-openeds="['/user', '/salary']"
         @select="onMenuSelect"
       >
         <template v-for="item in menuItems" :key="item.path">
