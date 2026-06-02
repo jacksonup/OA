@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   User, OfficeBuilding, Briefcase, Fold, Expand,
-  Star, Medal, Trophy, School, Phone, Timer, Money
+  Star, Medal, Trophy, School, Phone, Timer, Money, Upload
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -33,7 +33,8 @@ const menuItems = [
       { path: '/attendance', title: '考勤管理', icon: Timer },
       { path: '/salary/month', title: '月度薪酬核算', icon: Money }
     ]
-  }
+  },
+  { path: '/import-ledger', title: '人员台账导入', icon: Upload }
 ]
 
 const activeMenu = computed(() => route.path)

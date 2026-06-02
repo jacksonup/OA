@@ -64,6 +64,12 @@ const routes = [
         name: 'SalaryList',
         component: () => import('../views/attendance/SalaryList.vue'),
         meta: { title: '月度薪酬核算' }
+      },
+      {
+        path: 'import-ledger',
+        name: 'ImportLedger',
+        component: () => import('../views/import/ImportLedger.vue'),
+        meta: { title: '人员台账导入' }
       }
     ]
   }

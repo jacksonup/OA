@@ -203,3 +203,24 @@ export const salaryMonths = (() => {
   }
   return months
 })()
+
+// --- 人员台账导入 ---
+export const ledgerRecords = reactive([])
+let nextLedgerId = 1
+
+export function addLedgerRecord(record) {
+  record.id = nextLedgerId++
+  record.createdAt = new Date().toISOString().slice(0, 10)
+  // 计算证书摘要和学历摘要
+  const certKeys = ['certMinistry','certRegistered','certCost','certConstructor','certSafety','certInspector']
+  const certLabels = { certMinistry:'部监', certRegistered:'国注', certCost:'一造', certConstructor:'一建', certSafety:'注安', certInspector:'检测' }
+  record._certSummary = certKeys.filter(k => record[k] && (record[k] === '√' || record[k] === '有' || record[k] === '是')).map(k => certLabels[k]).join('、')
+  record._eduSummary = [record.edu1Level, record.edu2Level].filter(Boolean).join(' → ')
+  ledgerRecords.push(record)
+  return record
+}
+
+export function deleteLedgerRecord(id) {
+  const idx = ledgerRecords.findIndex(r => r.id === id)
+  if (idx !== -1) ledgerRecords.splice(idx, 1)
+}
