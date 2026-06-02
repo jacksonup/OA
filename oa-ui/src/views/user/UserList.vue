@@ -3,10 +3,12 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Search, RefreshLeft, Plus, Edit, Delete, Setting, Star,
-  Medal, Trophy, School, Phone, UserFilled, Calendar, Postcard, Collection
+  Medal, Trophy, School, Phone, UserFilled, Calendar, Postcard, Collection,
+  Upload, Download
 } from '@element-plus/icons-vue'
 import { users, departments, positions, addUser, updateUser, deleteUser } from '../../mock/data.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import * as XLSX from 'xlsx'
 
 const searchForm = reactive({ keyword: '', projectName: '', status: null, education: '', certificate: '', experience: '' })
 const route = useRoute()
@@ -25,7 +27,11 @@ const emptyForm = {
   phone: '', email: '', nativePlace: '', ethnicity: '汉族', political: '群众',
   marital: '未婚', educations: [],
   deptId: null, positionId: null, entryDate: '', confirmDate: '', contractEnd: '',
-  empType: '正式员工', status: 1, address: '', emergencyContact: '', emergencyPhone: '', remark: ''
+  empType: '正式员工', status: 1, address: '',
+  projectName: '', jobTitle: '', certificates: '', monthlySalary: '',
+  primaryName: '', primaryRelation: '', primaryPhone: '',
+  secondaryName: '', secondaryRelation: '', secondaryPhone: '',
+  remark: ''
 }
 
 const educationOrder = ['初中及以下', '高中', '大专', '本科', '硕士', '博士']
@@ -266,17 +272,16 @@ const userOptions = computed(() => {
 
 const employeeMasterRows = computed(() => {
   return users.map((user, index) => {
-    const projectName = projectOptions[index % projectOptions.length]
     return {
       ...user,
       employeeNo: String(601076 + index * 10),
       displayName: `${user.name}(${String(9300 + user.id)})`,
-      projectName,
-      jobTitle: jobTitles[index % jobTitles.length],
-      certificates: certificateOptions[index % certificateOptions.length],
+      projectName: user.projectName || projectOptions[index % projectOptions.length],
+      jobTitle: user.jobTitle || jobTitles[index % jobTitles.length],
+      certificates: user.certificates || certificateOptions[index % certificateOptions.length],
       leaveDate: user.status === 1 ? '' : '2026-06',
       contractStart: user.confirmDate || user.entryDate,
-      monthlySalary: user.status === 1 ? `${9000 + index * 500}` : '',
+      monthlySalary: user.monthlySalary || (user.status === 1 ? `${9000 + index * 500}` : ''),
       createdAt: '2026-06-01',
       updatedAt: '2026-06-01',
       syncStatus: '已同步'
@@ -397,12 +402,12 @@ function getDefaultEmergencyContacts(user, index) {
   const primaryIdx = index % emergencyContactNames.length
   const secondaryIdx = (index + 3) % emergencyContactNames.length
   return {
-    primaryName: user.emergencyContact || emergencyContactNames[primaryIdx],
-    primaryRelation: emergencyRelations[index % 5],
-    primaryPhone: user.emergencyPhone || `139${String(10000000 + index * 137).slice(0, 8)}`,
-    secondaryName: emergencyContactNames[secondaryIdx],
-    secondaryRelation: emergencyRelations[(index + 2) % 5 + 1],
-    secondaryPhone: `138${String(10000000 + index * 251).slice(0, 8)}`
+    primaryName: user.primaryName || emergencyContactNames[primaryIdx],
+    primaryRelation: user.primaryRelation || emergencyRelations[index % 5],
+    primaryPhone: user.primaryPhone || `139${String(10000000 + index * 137).slice(0, 8)}`,
+    secondaryName: user.secondaryName || emergencyContactNames[secondaryIdx],
+    secondaryRelation: user.secondaryRelation || emergencyRelations[(index + 2) % 5 + 1],
+    secondaryPhone: user.secondaryPhone || `138${String(10000000 + index * 251).slice(0, 8)}`
   }
 }
 
@@ -707,6 +712,206 @@ function saveEmergency() {
   ElMessage.success('保存成功')
 }
 
+// --- 导入功能 ---
+const importDialogVisible = ref(false)
+const importFile = ref(null)
+const importPreview = ref([])
+const importErrors = ref([])
+const importUploadRef = ref(null)
+
+const importFieldMap = [
+  { col: '员工工号', key: 'empNo' },
+  { col: '姓名', key: 'name', required: true },
+  { col: '性别', key: 'gender' },
+  { col: '出生日期', key: 'birthDate' },
+  { col: '身份证号', key: 'idCard' },
+  { col: '手机号', key: 'phone', required: true },
+  { col: '邮箱', key: 'email' },
+  { col: '籍贯', key: 'nativePlace' },
+  { col: '民族', key: 'ethnicity' },
+  { col: '政治面貌', key: 'political' },
+  { col: '婚姻状况', key: 'marital' },
+  { col: '所属项目部', key: 'deptName', required: true },
+  { col: '所属岗位', key: 'positionName', required: true },
+  { col: '所属项目', key: 'projectName' },
+  { col: '职称', key: 'jobTitle' },
+  { col: '持证情况', key: 'certificates' },
+  { col: '入职日期', key: 'entryDate', required: true },
+  { col: '转正日期', key: 'confirmDate' },
+  { col: '合同到期日', key: 'contractEnd' },
+  { col: '用工形式', key: 'empType' },
+  { col: '员工状态', key: 'status' },
+  { col: '月工资标准', key: 'monthlySalary' },
+  { col: '现住址', key: 'address' },
+  { col: '第一联系人姓名', key: 'primaryName' },
+  { col: '第一联系人关系', key: 'primaryRelation' },
+  { col: '第一联系人电话', key: 'primaryPhone' },
+  { col: '第二联系人姓名', key: 'secondaryName' },
+  { col: '第二联系人关系', key: 'secondaryRelation' },
+  { col: '第二联系人电话', key: 'secondaryPhone' },
+  { col: '备注', key: 'remark' }
+]
+
+function downloadTemplate() {
+  const headers = importFieldMap.map(f => f.col)
+  const ws = XLSX.utils.aoa_to_sheet([headers])
+  ws['!cols'] = headers.map(() => ({ wch: 18 }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '员工信息')
+  XLSX.writeFile(wb, '员工导入模板.xlsx')
+  ElMessage.success('模板已下载')
+}
+
+function handleImportFile(file) {
+  importFile.value = file
+  importErrors.value = []
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' })
+      const sheetName = wb.SheetNames[0]
+      if (!sheetName) {
+        ElMessage.error('Excel 文件中没有工作表')
+        return
+      }
+      const ws = wb.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(ws, { defval: '' })
+
+      if (!jsonData.length) {
+        ElMessage.error('未读取到数据行')
+        return
+      }
+
+      const excelHeaders = Object.keys(jsonData[0])
+      const colMap = {}
+      for (const h of excelHeaders) {
+        const match = importFieldMap.find(f => f.col === h)
+        if (match) colMap[h] = match
+      }
+
+      if (!colMap[Object.keys(colMap).find(k => colMap[k].key === 'name')]) {
+        ElMessage.error('未找到"姓名"列，请使用模板文件')
+        return
+      }
+
+      const errors = []
+      const preview = jsonData.map((row, rowIdx) => {
+        const mapped = { educations: [] }
+        const rowErrors = []
+
+        for (const [header, value] of Object.entries(row)) {
+          const mapping = colMap[header]
+          if (!mapping) continue
+          const strVal = String(value).trim()
+          if (!strVal) continue
+          mapped[mapping.key] = strVal
+        }
+
+        for (const field of importFieldMap) {
+          if (field.required && !mapped[field.key]) {
+            rowErrors.push(`缺少必填项: ${field.col}`)
+          }
+        }
+
+        if (mapped.phone && !/^1[3-9]\d{9}$/.test(mapped.phone)) {
+          rowErrors.push('手机号格式不正确')
+        }
+        if (mapped.status === '在职') mapped.status = 1
+        else if (mapped.status === '离职') mapped.status = 0
+        else if (mapped.status) mapped.status = Number(mapped.status) || 1
+
+        if (mapped.deptName) {
+          const dept = departments.find(d => d.name === mapped.deptName)
+          if (!dept) rowErrors.push(`项目部"${mapped.deptName}"不存在`)
+          else mapped.deptId = dept.id
+        }
+        if (mapped.positionName) {
+          const pos = positions.find(p => p.name === mapped.positionName)
+          if (!pos) rowErrors.push(`岗位"${mapped.positionName}"不存在`)
+          else mapped.positionId = pos.id
+        }
+
+        if (rowErrors.length) {
+          errors.push({ row: rowIdx + 2, name: mapped.name || '(空)', errors: rowErrors })
+        }
+
+        mapped._valid = rowErrors.length === 0
+        mapped._rowNum = rowIdx + 2
+        mapped._errors = rowErrors
+        return mapped
+      })
+
+      importErrors.value = errors
+      importPreview.value = preview
+
+      if (!preview.filter(r => r._valid).length) {
+        ElMessage.warning('没有可导入的有效数据行')
+      }
+    } catch (err) {
+      ElMessage.error('解析 Excel 文件失败: ' + err.message)
+    }
+  }
+  reader.readAsArrayBuffer(file.raw)
+}
+
+function confirmImport() {
+  const validRows = importPreview.value.filter(r => r._valid)
+  if (!validRows.length) {
+    ElMessage.warning('没有可导入的有效数据')
+    return
+  }
+  let imported = 0
+  for (const row of validRows) {
+    const user = {
+      name: row.name,
+      empNo: row.empNo || '',
+      gender: row.gender || '',
+      birthDate: row.birthDate || '',
+      idCard: row.idCard || '',
+      phone: row.phone || '',
+      email: row.email || '',
+      nativePlace: row.nativePlace || '',
+      ethnicity: row.ethnicity || '汉族',
+      political: row.political || '群众',
+      marital: row.marital || '未婚',
+      educations: [],
+      deptId: row.deptId || null,
+      positionId: row.positionId || null,
+      entryDate: row.entryDate || '',
+      confirmDate: row.confirmDate || '',
+      contractEnd: row.contractEnd || '',
+      empType: row.empType || '正式员工',
+      status: row.status || 1,
+      address: row.address || '',
+      projectName: row.projectName || '',
+      jobTitle: row.jobTitle || '',
+      certificates: row.certificates || '',
+      monthlySalary: row.monthlySalary || '',
+      primaryName: row.primaryName || '',
+      primaryRelation: row.primaryRelation || '',
+      primaryPhone: row.primaryPhone || '',
+      secondaryName: row.secondaryName || '',
+      secondaryRelation: row.secondaryRelation || '',
+      secondaryPhone: row.secondaryPhone || '',
+      remark: row.remark || ''
+    }
+    addUser(user)
+    imported++
+  }
+  importDialogVisible.value = false
+  importFile.value = null
+  importPreview.value = []
+  importErrors.value = []
+  ElMessage.success(`成功导入 ${imported} 条员工记录`)
+}
+
+function closeImport() {
+  importDialogVisible.value = false
+  importFile.value = null
+  importPreview.value = []
+  importErrors.value = []
+}
+
 watch(
   () => route.path,
   path => {
@@ -835,6 +1040,12 @@ const rules = {
                 <p class="page-subtitle">集中维护员工身份、项目、任职、合同与同步信息</p>
               </div>
               <div class="header-actions">
+                <el-button :icon="Download" round @click="downloadTemplate">
+                  下载模板
+                </el-button>
+                <el-button :icon="Upload" round @click="importDialogVisible = true">
+                  导入
+                </el-button>
                 <el-button :icon="Setting" round @click="fieldConfigVisible = true">
                   字段配置
                 </el-button>
@@ -1362,6 +1573,76 @@ const rules = {
       </template>
     </el-dialog>
 
+    <el-dialog v-model="importDialogVisible" title="导入员工" width="960px" top="3vh" destroy-on-close @closed="closeImport">
+      <template v-if="!importPreview.length">
+        <div class="import-upload-area">
+          <div class="import-upload-icon">
+            <el-icon :size="48"><Upload /></el-icon>
+          </div>
+          <p class="import-upload-title">上传 Excel 文件导入员工数据</p>
+          <p class="import-upload-hint">支持 .xlsx / .xls 格式，请先下载模板按格式填写</p>
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:16px">
+            <el-button type="primary" :icon="Download" round @click="downloadTemplate">下载模板</el-button>
+            <el-upload
+              ref="importUploadRef"
+              :auto-upload="false"
+              :limit="1"
+              accept=".xlsx,.xls"
+              :on-change="handleImportFile"
+              :show-file-list="false"
+            >
+              <el-button :icon="Upload" round>选择文件</el-button>
+            </el-upload>
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <div class="import-summary">
+          <span>共解析 <strong>{{ importPreview.length }}</strong> 行，
+            有效 <strong style="color:var(--ios-green)">{{ importPreview.filter(r => r._valid).length }}</strong> 行，
+            错误 <strong style="color:var(--ios-red)">{{ importErrors.length }}</strong> 行</span>
+          <el-button link type="primary" @click="closeImport">重新选择</el-button>
+        </div>
+        <div v-if="importErrors.length" class="import-error-list">
+          <div v-for="err in importErrors" :key="err.row" class="import-error-item">
+            <span>第 {{ err.row }} 行「{{ err.name }}」：</span>
+            <span v-for="(e, ei) in err.errors" :key="ei">{{ e }}{{ ei < err.errors.length - 1 ? '；' : '' }}</span>
+          </div>
+        </div>
+        <div class="table-wrap" style="max-height:400px;overflow:auto;margin-top:12px">
+          <el-table :data="importPreview" size="small" class="data-table" style="width:100%">
+            <el-table-column prop="_rowNum" label="#" width="50" />
+            <el-table-column prop="name" label="姓名" width="90" fixed="left">
+              <template #default="{ row }">
+                <span :style="{ color: row._valid ? 'var(--ios-text)' : 'var(--ios-red)' }">{{ row.name || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="empNo" label="工号" width="90" />
+            <el-table-column prop="gender" label="性别" width="60" />
+            <el-table-column prop="phone" label="手机号" width="120" />
+            <el-table-column prop="deptName" label="项目部" width="120" />
+            <el-table-column prop="positionName" label="岗位" width="130" />
+            <el-table-column prop="projectName" label="所属项目" width="130" />
+            <el-table-column prop="jobTitle" label="职称" width="110" />
+            <el-table-column prop="entryDate" label="入职日期" width="110" />
+            <el-table-column prop="empType" label="用工形式" width="100" />
+            <el-table-column label="状态" width="70">
+              <template #default="{ row }">
+                <span v-if="row._valid" class="soft-pill green">有效</span>
+                <span v-else class="soft-pill" style="background:rgba(255,59,48,.1);color:var(--ios-red)">错误</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
+      <template #footer>
+        <el-button round @click="closeImport">取消</el-button>
+        <el-button type="primary" round :disabled="!importPreview.filter(r => r._valid).length" @click="confirmImport">
+          确认导入（{{ importPreview.filter(r => r._valid).length }} 条）
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="projectDialogVisible" title="项目经历记录" width="720px" destroy-on-close>
       <el-form :model="projectForm" label-width="110px" size="default">
         <el-row :gutter="16">
@@ -1521,12 +1802,36 @@ const rules = {
             <el-form-item label="现住址"><el-input v-model="form.address" /></el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="16">
-          <el-col :span="8">
-            <el-form-item label="紧急联系人"><el-input v-model="form.emergencyContact" /></el-form-item>
+
+        <el-divider content-position="left">紧急联系人</el-divider>
+        <el-row :gutter="12">
+          <el-col :span="6">
+            <el-form-item label="第一联系人"><el-input v-model="form.primaryName" /></el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="紧急联系电话"><el-input v-model="form.emergencyPhone" maxlength="11" /></el-form-item>
+          <el-col :span="6">
+            <el-form-item label="关系">
+              <el-select v-model="form.primaryRelation" style="width:100%" clearable>
+                <el-option v-for="r in emergencyRelations" :key="r" :label="r" :value="r" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="电话"><el-input v-model="form.primaryPhone" maxlength="11" /></el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="第二联系人"><el-input v-model="form.secondaryName" /></el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="6">
+            <el-form-item label="二联系人关系">
+              <el-select v-model="form.secondaryRelation" style="width:100%" clearable>
+                <el-option v-for="r in emergencyRelations" :key="r" :label="r" :value="r" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="二联系人电话"><el-input v-model="form.secondaryPhone" maxlength="11" /></el-form-item>
           </el-col>
         </el-row>
 
@@ -1924,6 +2229,50 @@ const rules = {
 .cell-status.inactive {
   background: rgba(255, 59, 48, 0.08);
   color: var(--ios-red);
+}
+
+.import-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  border: 2px dashed var(--ios-border);
+  border-radius: var(--ios-radius-lg);
+  background: #ffffff;
+  text-align: center;
+}
+.import-upload-icon {
+  color: var(--ios-text-placeholder);
+  margin-bottom: 12px;
+}
+.import-upload-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ios-text);
+  margin-bottom: 6px;
+}
+.import-upload-hint {
+  font-size: 13px;
+  color: var(--ios-text-secondary);
+}
+.import-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 13px;
+  color: var(--ios-text-secondary);
+}
+.import-error-list {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: var(--ios-radius);
+  background: rgba(255, 59, 48, .06);
+}
+.import-error-item {
+  font-size: 12px;
+  color: var(--ios-red);
+  line-height: 1.7;
 }
 
 </style>

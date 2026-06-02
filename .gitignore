@@ -31,3 +31,9 @@ oa-ui/dist/
 /package-lock.json
 /需求文档.html
 /CLAUDE.md
+
+# Excel
+*.xlsx
+*.xls
+*.xlsm
+*.csv
