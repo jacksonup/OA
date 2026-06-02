@@ -223,6 +223,19 @@ body {
   transform: rotate(90deg);
 }
 
+/* Education sub-table in expanded row */
+.education-sub-table-wrap {
+  padding: 12px 16px 16px 48px;
+  background: rgba(0, 0, 0, .012);
+}
+.education-sub-table .el-table__header th {
+  background: transparent;
+  font-size: 11px;
+}
+.education-sub-table .el-table__body td {
+  font-size: 12px;
+}
+
 /* --- Tag --- */
 .el-tag {
   border-radius: 999px;

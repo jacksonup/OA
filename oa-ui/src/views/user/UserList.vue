@@ -42,7 +42,7 @@ function getHighestEducation(educations) {
 }
 
 function addEducation() {
-  form.educations.push({ education: '', school: '', major: '', startDate: '', endDate: '' })
+  form.educations.push({ education: '', studyMode: '', school: '', major: '', startDate: '', endDate: '', chsiProof: '' })
 }
 
 function removeEducation(index) {
@@ -75,6 +75,34 @@ const emptyProjectForm = {
 }
 const projectForm = reactive({ ...emptyProjectForm })
 const projectRecordMap = reactive({})
+
+const educationSearchForm = reactive({ keyword: '', education: '', studyMode: '' })
+const educationDialogVisible = ref(false)
+const currentEducationUserId = ref(null)
+const editingEducationIndex = ref(-1)
+const emptyEducationForm = {
+  education: '', studyMode: '', school: '', major: '', startDate: '', endDate: '', chsiProof: ''
+}
+const educationForm = reactive({ ...emptyEducationForm })
+const educationRecordMap = reactive({})
+
+const emergencyRelations = ['配偶', '父亲', '母亲', '子女', '兄弟', '姐妹', '朋友', '同事', '其他']
+const emergencyContactNames = [
+  '张丽华', '李秀英', '王建国', '赵秀兰', '陈明', '刘芳',
+  '黄伟', '周敏', '吴强', '郑红', '冯涛', '孙婷'
+]
+const emergencyDialogVisible = ref(false)
+const emptyEmergencyForm = {
+  userId: null,
+  primaryName: '',
+  primaryRelation: '',
+  primaryPhone: '',
+  secondaryName: '',
+  secondaryRelation: '',
+  secondaryPhone: ''
+}
+const emergencyForm = reactive({ ...emptyEmergencyForm })
+const emergencyRecordMap = reactive({})
 
 const genderOptions = ['男', '女']
 const ethnicityOptions = ['汉族', '蒙古族', '回族', '藏族', '维吾尔族', '苗族', '彝族', '壮族', '布依族', '朝鲜族', '满族', '侗族', '瑶族', '白族', '土家族']
@@ -111,6 +139,7 @@ const certificateOptions = [
 const practiceTitles = ['高级工程师', '工程师', '总监理工程师', '试验检测师', '一级建造师']
 const practiceCertificateFiles = ['执业证书.pdf', '注册证扫描件.pdf', '职称证书.pdf', '资格证扫描件.pdf']
 const unregisteredReasons = ['待单位注册', '资料补正中', '原单位转出中', '本周期无需注册', '']
+const studyModeOptions = ['全日制', '非全日制', '自考', '网络教育', '成人高考', '开放教育']
 
 const FIELD_STORAGE_KEY = 'oa-employee-master-visible-fields'
 const defaultVisibleFields = [
@@ -180,6 +209,16 @@ const practiceColumns = [
   { key: 'inspector', label: '检师', width: 92 },
   { key: 'practiceCertificateScan', label: '执业证书扫描件', width: 176, icon: Postcard },
   { key: 'unregisteredQualificationReason', label: '未注册的执业资格证书及原因', width: 250 }
+]
+
+const emergencyColumns = [
+  { key: 'relatedEmployee', label: '关联员工', width: 150, fixed: 'left', icon: UserFilled },
+  { key: 'primaryName', label: '第一联系人', width: 120 },
+  { key: 'primaryRelation', label: '关系', width: 100 },
+  { key: 'primaryPhone', label: '联系电话', width: 140, icon: Phone },
+  { key: 'secondaryName', label: '第二联系人', width: 120 },
+  { key: 'secondaryRelation', label: '关系', width: 100 },
+  { key: 'secondaryPhone', label: '联系电话', width: 140, icon: Phone }
 ]
 
 function getInitialVisibleFields() {
@@ -354,6 +393,33 @@ const projectRows = computed(() => {
   })
 })
 
+function getDefaultEmergencyContacts(user, index) {
+  const primaryIdx = index % emergencyContactNames.length
+  const secondaryIdx = (index + 3) % emergencyContactNames.length
+  return {
+    primaryName: user.emergencyContact || emergencyContactNames[primaryIdx],
+    primaryRelation: emergencyRelations[index % 5],
+    primaryPhone: user.emergencyPhone || `139${String(10000000 + index * 137).slice(0, 8)}`,
+    secondaryName: emergencyContactNames[secondaryIdx],
+    secondaryRelation: emergencyRelations[(index + 2) % 5 + 1],
+    secondaryPhone: `138${String(10000000 + index * 251).slice(0, 8)}`
+  }
+}
+
+const emergencyRows = computed(() => {
+  return employeeMasterRows.value.map((user, index) => {
+    const defaults = getDefaultEmergencyContacts(user, index)
+    const saved = emergencyRecordMap[user.id] || {}
+    return {
+      ...user,
+      userId: user.id,
+      relatedEmployee: user.displayName,
+      ...defaults,
+      ...saved
+    }
+  })
+})
+
 const filteredUsers = computed(() => {
   return employeeMasterRows.value.filter(u => {
     const keywordHit = !searchForm.keyword ||
@@ -407,6 +473,59 @@ const filteredProjectRows = computed(() => {
   })
 })
 
+const educationRows = computed(() => {
+  return employeeMasterRows.value.map((user, index) => {
+    const rawEducations = user.educations || []
+    const highest = rawEducations.length ? rawEducations.reduce((a, b) =>
+      educationOrder.indexOf(a.education) >= educationOrder.indexOf(b.education) ? a : b
+    ) : null
+    const recordMap = educationRecordMap[user.id]
+    const allEducations = recordMap || rawEducations
+    return {
+      ...user,
+      displayName: user.displayName || `${user.name}(${9300 + user.id})`,
+      educations: allEducations,
+      educationCount: allEducations.length,
+      highestEducation: highest ? highest.education : '',
+      highestStudyMode: highest ? highest.studyMode : '',
+      highestSchool: highest ? highest.school : '',
+      highestMajor: highest ? highest.major : '',
+      highestChsiProof: highest ? highest.chsiProof : '',
+      expanded: false
+    }
+  })
+})
+
+const filteredEducationRows = computed(() => {
+  return educationRows.value.filter(u => {
+    const keywordHit = !educationSearchForm.keyword ||
+      u.name.includes(educationSearchForm.keyword) ||
+      u.employeeNo.includes(educationSearchForm.keyword) ||
+      u.displayName.includes(educationSearchForm.keyword)
+    if (!keywordHit) return false
+    if (educationSearchForm.education && u.highestEducation !== educationSearchForm.education) return false
+    if (educationSearchForm.studyMode && !u.educations.some(e => e.studyMode === educationSearchForm.studyMode)) return false
+    return true
+  })
+})
+
+const filteredEmergencyRows = computed(() => {
+  return emergencyRows.value.filter(u => {
+    const keywordHit = !searchForm.keyword ||
+      u.name.includes(searchForm.keyword) ||
+      u.employeeNo.includes(searchForm.keyword) ||
+      u.relatedEmployee.includes(searchForm.keyword) ||
+      u.primaryName.includes(searchForm.keyword) ||
+      u.primaryPhone.includes(searchForm.keyword) ||
+      u.secondaryName.includes(searchForm.keyword) ||
+      u.secondaryPhone.includes(searchForm.keyword)
+    if (!keywordHit) return false
+    if (searchForm.projectName && u.projectName !== searchForm.projectName) return false
+    if (searchForm.status !== null && searchForm.status !== '' && u.status !== searchForm.status) return false
+    return true
+  })
+})
+
 const activeUserCount = computed(() => users.filter(u => u.status === 1).length)
 const regularUserCount = computed(() => users.filter(u => u.empType === '正式员工').length)
 const userDeptCount = computed(() => new Set(users.map(u => u.deptId)).size)
@@ -419,6 +538,13 @@ function handleReset() {
   searchForm.education = ''
   searchForm.certificate = ''
   searchForm.experience = ''
+}
+
+function handleEducationSearch() {}
+function handleEducationReset() {
+  educationSearchForm.keyword = ''
+  educationSearchForm.education = ''
+  educationSearchForm.studyMode = ''
 }
 
 function openAddPractice() {
@@ -496,6 +622,91 @@ function saveProject() {
   ElMessage.success('保存成功')
 }
 
+function openAddEducation(user = null) {
+  Object.assign(educationForm, emptyEducationForm)
+  currentEducationUserId.value = user ? user.id : null
+  editingEducationIndex.value = -1
+  educationDialogVisible.value = true
+}
+
+function openEditEducation(user, edu, index) {
+  Object.assign(educationForm, { ...edu })
+  currentEducationUserId.value = user.id
+  editingEducationIndex.value = index
+  educationDialogVisible.value = true
+}
+
+function saveEducation() {
+  if (!currentEducationUserId.value) {
+    ElMessage.warning('请先选择员工')
+    return
+  }
+  if (!educationForm.education || !educationForm.school || !educationForm.major) {
+    ElMessage.warning('请完善学历、学校、专业')
+    return
+  }
+  const userId = currentEducationUserId.value
+  const user = users.find(u => u.id === userId)
+  const defaults = user ? (user.educations || []) : []
+  const records = [...(educationRecordMap[userId] || defaults)]
+  const entry = { ...educationForm }
+  if (editingEducationIndex.value > -1) {
+    records.splice(editingEducationIndex.value, 1, entry)
+  } else {
+    records.push(entry)
+  }
+  educationRecordMap[userId] = records
+  educationDialogVisible.value = false
+  ElMessage.success('保存成功')
+}
+
+function deleteEducation(user, index) {
+  const userId = user.id
+  const defaults = user.educations || []
+  const records = [...(educationRecordMap[userId] || defaults)]
+  records.splice(index, 1)
+  educationRecordMap[userId] = records
+  ElMessage.success('已删除')
+}
+
+function getEducationRowsForUser(user) {
+  return (educationRecordMap[user.id] || user.educations || []).map((edu, index) => ({
+    ...edu,
+    _index: index
+  }))
+}
+
+function openEditEmergency(row) {
+  const idx = employeeMasterRows.value.indexOf(row)
+  const defaults = getDefaultEmergencyContacts(row, idx >= 0 ? idx : row.id)
+  const saved = emergencyRecordMap[row.userId] || {}
+  const data = { ...defaults, ...saved }
+  Object.assign(emergencyForm, {
+    userId: row.userId,
+    primaryName: data.primaryName || '',
+    primaryRelation: data.primaryRelation || '',
+    primaryPhone: data.primaryPhone || '',
+    secondaryName: data.secondaryName || '',
+    secondaryRelation: data.secondaryRelation || '',
+    secondaryPhone: data.secondaryPhone || ''
+  })
+  emergencyDialogVisible.value = true
+}
+
+function saveEmergency() {
+  if (!emergencyForm.userId) {
+    ElMessage.warning('请选择关联员工')
+    return
+  }
+  if (!emergencyForm.primaryName || !emergencyForm.primaryPhone) {
+    ElMessage.warning('请填写第一联系人姓名和电话')
+    return
+  }
+  emergencyRecordMap[emergencyForm.userId] = { ...emergencyForm }
+  emergencyDialogVisible.value = false
+  ElMessage.success('保存成功')
+}
+
 watch(
   () => route.path,
   path => {
@@ -549,7 +760,7 @@ const rules = {
     { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
   ],
   email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
-  deptId: [{ required: true, message: '请选择部门', trigger: 'change' }],
+  deptId: [{ required: true, message: '请选择项目部', trigger: 'change' }],
   positionId: [{ required: true, message: '请选择岗位', trigger: 'change' }],
   entryDate: [{ required: true, message: '请选择入职日期', trigger: 'change' }]
 }
@@ -577,7 +788,7 @@ const rules = {
               <div class="summary-note">按用工形式统计</div>
             </div>
             <div class="summary-item">
-              <div class="summary-label">覆盖部门</div>
+              <div class="summary-label">覆盖项目部</div>
               <div class="summary-value">{{ userDeptCount }}</div>
               <div class="summary-note">员工所属组织范围</div>
             </div>
@@ -844,10 +1055,173 @@ const rules = {
           </el-card>
         </template>
 
+        <template v-else-if="activeEmployeeModule === 'education'">
+          <el-card class="search-card">
+            <el-form :model="educationSearchForm" inline class="toolbar-form">
+              <el-form-item label="关键字">
+                <el-input v-model="educationSearchForm.keyword" placeholder="姓名/工号" clearable style="width:230px" />
+              </el-form-item>
+              <el-form-item label="最高学历">
+                <el-select v-model="educationSearchForm.education" placeholder="全部" clearable style="width:140px">
+                  <el-option v-for="item in educationOptions" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="学习形式">
+                <el-select v-model="educationSearchForm.studyMode" placeholder="全部" clearable style="width:140px">
+                  <el-option v-for="item in studyModeOptions" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :icon="Search" round @click="handleEducationSearch">查询</el-button>
+                <el-button :icon="RefreshLeft" round @click="handleEducationReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+
+          <el-card class="table-card">
+            <div class="page-header">
+              <div>
+                <h2>学历信息</h2>
+                <p class="page-subtitle">维护员工学历、学习形式、毕业院校与学信网证明，默认展示最高学历</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <el-table :data="filteredEducationRows" class="data-table" style="width:100%" max-height="calc(100vh - 270px)" row-class-name="user-row" row-key="id">
+                <el-table-column type="expand">
+                  <template #default="{ row }">
+                    <div class="education-sub-table-wrap">
+                      <el-table :data="getEducationRowsForUser(row)" size="small" class="education-sub-table" style="width:100%">
+                        <el-table-column prop="education" label="学历" width="110">
+                          <template #default="{ row: edu }">
+                            <span class="soft-pill neutral">{{ edu.education }}</span>
+                          </template>
+                        </el-table-column>
+                        <el-table-column prop="studyMode" label="学习形式" width="120">
+                          <template #default="{ row: edu }">{{ edu.studyMode || '-' }}</template>
+                        </el-table-column>
+                        <el-table-column prop="school" label="毕业学校" min-width="140" />
+                        <el-table-column prop="major" label="专业" min-width="140" />
+                        <el-table-column label="起止时间" width="200">
+                          <template #default="{ row: edu }">{{ edu.startDate }} 至 {{ edu.endDate }}</template>
+                        </el-table-column>
+                        <el-table-column label="学信网证明" width="240">
+                          <template #default="{ row: edu }">
+                            <el-button v-if="edu.chsiProof" type="primary" link size="small">{{ edu.chsiProof }}</el-button>
+                            <span v-else class="empty-mark">未上传</span>
+                          </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="120" align="center">
+                          <template #default="{ row: edu }">
+                            <el-button type="primary" link size="small" :icon="Edit" @click="openEditEducation(row, edu, edu._index)">编辑</el-button>
+                            <el-button type="danger" link size="small" :icon="Delete" @click="deleteEducation(row, edu._index)">删除</el-button>
+                          </template>
+                        </el-table-column>
+                      </el-table>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="displayName" label="员工" width="136" fixed="left">
+                  <template #default="{ row }">
+                    <span class="cell-name">{{ row.displayName }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="最高学历" width="110">
+                  <template #default="{ row }">
+                    <span class="soft-pill neutral">{{ row.highestEducation }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="highestStudyMode" label="学习形式" width="120" />
+                <el-table-column prop="highestSchool" label="毕业学校" min-width="150" />
+                <el-table-column prop="highestMajor" label="专业" min-width="150" />
+                <el-table-column label="学信网证明" width="240">
+                  <template #default="{ row }">
+                    <el-button v-if="row.highestChsiProof" type="primary" link size="small">{{ row.highestChsiProof }}</el-button>
+                    <span v-else class="empty-mark">未上传</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="educationCount" label="学历数" width="80" align="center">
+                  <template #default="{ row }">
+                    <span class="project-count">{{ row.educationCount }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="96" fixed="right" align="center">
+                  <template #default="{ row }">
+                    <el-button type="primary" link size="small" :icon="Plus" @click="openAddEducation(row)">添加</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-card>
+        </template>
+
+        <template v-else-if="activeEmployeeModule === 'emergency'">
+          <el-card class="search-card">
+            <el-form :model="searchForm" inline class="toolbar-form">
+              <el-form-item label="关键字">
+                <el-input v-model="searchForm.keyword" placeholder="员工/联系人姓名/电话" clearable style="width:230px" />
+              </el-form-item>
+              <el-form-item label="所属项目">
+                <el-select v-model="searchForm.projectName" placeholder="全部" clearable style="width:160px">
+                  <el-option v-for="project in projectOptions" :key="project" :label="project" :value="project" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="员工状态">
+                <el-select v-model="searchForm.status" placeholder="全部" clearable style="width:120px">
+                  <el-option label="在职" :value="1" />
+                  <el-option label="离职" :value="0" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :icon="Search" round @click="handleSearch">查询</el-button>
+                <el-button :icon="RefreshLeft" round @click="handleReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+
+          <el-card class="table-card">
+            <div class="page-header">
+              <div>
+                <h2>紧急联系人信息</h2>
+                <p class="page-subtitle">维护每位员工的第一联系人及第二联系人，含关系与联系电话</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <el-table :data="filteredEmergencyRows" class="data-table emergency-table" style="width:100%" max-height="calc(100vh - 270px)" row-class-name="user-row">
+                <el-table-column
+                  v-for="column in emergencyColumns"
+                  :key="column.key"
+                  :prop="column.key"
+                  :width="column.width"
+                  :fixed="column.fixed"
+                  align="left"
+                >
+                  <template #header>
+                    <span class="table-header-label">
+                      <el-icon v-if="column.icon" :size="15"><component :is="column.icon" /></el-icon>
+                      {{ column.label }}
+                    </span>
+                  </template>
+                  <template #default="{ row }">
+                    <span v-if="column.key === 'relatedEmployee'" class="cell-name">{{ row.relatedEmployee }}</span>
+                    <span v-else-if="column.key === 'primaryRelation' || column.key === 'secondaryRelation'" class="soft-pill neutral">{{ row[column.key] || '-' }}</span>
+                    <span v-else-if="column.key === 'primaryPhone' || column.key === 'secondaryPhone'" style="font-variant-numeric:tabular-nums">{{ row[column.key] || '-' }}</span>
+                    <span v-else>{{ row[column.key] || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="96" fixed="right" align="center">
+                  <template #default="{ row }">
+                    <el-button type="primary" link size="small" :icon="Edit" @click="openEditEmergency(row)">编辑</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-card>
+        </template>
+
         <div v-else class="module-placeholder">
-          <el-icon :size="42"><component :is="employeeModules.find(item => item.key === activeEmployeeModule)?.icon" /></el-icon>
-          <h3>{{ employeeModules.find(item => item.key === activeEmployeeModule)?.title }}</h3>
-          <p>已完成二级菜单入口，后续可在此模块维护对应员工明细。</p>
+          <el-icon :size="42"><Phone /></el-icon>
+          <h3>未知模块</h3>
+          <p>请从左侧菜单选择子模块查看。</p>
         </div>
       </section>
     </div>
@@ -932,6 +1306,62 @@ const rules = {
       </template>
     </el-dialog>
 
+    <el-dialog v-model="emergencyDialogVisible" title="紧急联系人信息" width="680px" destroy-on-close>
+      <el-form :model="emergencyForm" label-width="120px" size="default">
+        <el-form-item label="关联员工" required>
+          <el-select v-model="emergencyForm.userId" filterable placeholder="请选择员工" style="width:100%">
+            <el-option v-for="user in userOptions" :key="user.value" :label="user.label" :value="user.value" />
+          </el-select>
+        </el-form-item>
+
+        <el-divider content-position="left">第一联系人</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="联系人姓名" required>
+              <el-input v-model="emergencyForm.primaryName" placeholder="姓名" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="关系">
+              <el-select v-model="emergencyForm.primaryRelation" placeholder="请选择" style="width:100%" clearable>
+                <el-option v-for="r in emergencyRelations" :key="r" :label="r" :value="r" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="联系电话" required>
+              <el-input v-model="emergencyForm.primaryPhone" placeholder="手机号" maxlength="11" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-divider content-position="left">第二联系人</el-divider>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="联系人姓名">
+              <el-input v-model="emergencyForm.secondaryName" placeholder="姓名" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="关系">
+              <el-select v-model="emergencyForm.secondaryRelation" placeholder="请选择" style="width:100%" clearable>
+                <el-option v-for="r in emergencyRelations" :key="r" :label="r" :value="r" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="联系电话">
+              <el-input v-model="emergencyForm.secondaryPhone" placeholder="手机号" maxlength="11" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button round @click="emergencyDialogVisible = false">取消</el-button>
+        <el-button type="primary" round @click="saveEmergency">保存</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="projectDialogVisible" title="项目经历记录" width="720px" destroy-on-close>
       <el-form :model="projectForm" label-width="110px" size="default">
         <el-row :gutter="16">
@@ -974,6 +1404,58 @@ const rules = {
       <template #footer>
         <el-button round @click="projectDialogVisible = false">取消</el-button>
         <el-button type="primary" round @click="saveProject">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="educationDialogVisible" title="学历信息" width="680px" top="5vh" destroy-on-close>
+      <el-form :model="educationForm" label-width="100px" size="default">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="学历" required>
+              <el-select v-model="educationForm.education" placeholder="请选择学历" style="width:100%">
+                <el-option v-for="item in educationOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="学习形式" required>
+              <el-select v-model="educationForm.studyMode" placeholder="请选择学习形式" style="width:100%">
+                <el-option v-for="item in studyModeOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="毕业学校" required>
+              <el-input v-model="educationForm.school" placeholder="学校全称" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="专业" required>
+              <el-input v-model="educationForm.major" placeholder="专业名称" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="开始时间" required>
+              <el-date-picker v-model="educationForm.startDate" type="month" placeholder="选择月份" value-format="YYYY-MM" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="结束时间" required>
+              <el-date-picker v-model="educationForm.endDate" type="month" placeholder="选择月份" value-format="YYYY-MM" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="学信网证明">
+          <el-input v-model="educationForm.chsiProof" placeholder="文件名或备案表编号" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button round @click="educationDialogVisible = false">取消</el-button>
+        <el-button type="primary" round @click="saveEducation">保存</el-button>
       </template>
     </el-dialog>
 
@@ -1061,29 +1543,45 @@ const rules = {
             <el-button type="danger" link size="small" @click="removeEducation(idx)">删除</el-button>
           </div>
           <el-row :gutter="12">
-            <el-col :span="8">
+            <el-col :span="12">
               <el-form-item label="学历">
                 <el-select v-model="edu.education" style="width:100%">
                   <el-option v-for="e in educationOptions" :key="e" :label="e" :value="e" />
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :span="12">
+              <el-form-item label="学习形式">
+                <el-select v-model="edu.studyMode" style="width:100%">
+                  <el-option v-for="item in studyModeOptions" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="12">
               <el-form-item label="毕业院校"><el-input v-model="edu.school" /></el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :span="12">
               <el-form-item label="专业"><el-input v-model="edu.major" /></el-form-item>
             </el-col>
           </el-row>
           <el-row :gutter="12">
-            <el-col :span="8">
+            <el-col :span="12">
               <el-form-item label="入学时间">
                 <el-date-picker v-model="edu.startDate" type="month" placeholder="选择月份" style="width:100%" value-format="YYYY-MM" />
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :span="12">
               <el-form-item label="毕业时间">
                 <el-date-picker v-model="edu.endDate" type="month" placeholder="选择月份" style="width:100%" value-format="YYYY-MM" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="24">
+              <el-form-item label="学信网证明">
+                <el-input v-model="edu.chsiProof" placeholder="文件名或备案表编号" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -1092,7 +1590,7 @@ const rules = {
         <el-divider content-position="left">工作信息</el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="部门" prop="deptId">
+            <el-form-item label="项目部" prop="deptId">
               <el-select v-model="form.deptId" style="width:100%" @change="form.positionId = null">
                 <el-option v-for="d in deptOptions" :key="d.value" :label="d.label" :value="d.value" />
               </el-select>

@@ -23,7 +23,7 @@ const menuItems = [
       { path: '/user/emergency', title: '紧急联系人信息', icon: Phone }
     ]
   },
-  { path: '/department', title: '部门管理', icon: OfficeBuilding },
+  { path: '/department', title: '项目部管理', icon: OfficeBuilding },
   { path: '/position', title: '岗位管理', icon: Briefcase }
 ]
 

@@ -88,7 +88,7 @@ function handleSubmit() {
 const rules = {
   name: [{ required: true, message: '请输入岗位名称', trigger: 'blur' }],
   code: [{ required: true, message: '请输入岗位编码', trigger: 'blur' }],
-  deptId: [{ required: true, message: '请选择所属部门', trigger: 'change' }]
+  deptId: [{ required: true, message: '请选择所属项目部', trigger: 'change' }]
 }
 </script>
 
@@ -111,7 +111,7 @@ const rules = {
         <div class="summary-note">覆盖职能分类</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">覆盖部门</div>
+        <div class="summary-label">覆盖项目部</div>
         <div class="summary-value">{{ positionDeptCount }}</div>
         <div class="summary-note">岗位所属组织范围</div>
       </div>
@@ -122,7 +122,7 @@ const rules = {
         <el-form-item label="关键字">
           <el-input v-model="searchForm.keyword" placeholder="岗位名称/编码" clearable style="width:200px" />
         </el-form-item>
-        <el-form-item label="部门">
+        <el-form-item label="项目部">
           <el-select v-model="searchForm.deptId" placeholder="全部" clearable style="width:160px">
             <el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
@@ -152,13 +152,13 @@ const rules = {
         <el-table :data="filteredPositions" class="data-table" style="width:100%" max-height="calc(100vh - 370px)">
           <el-table-column prop="code" label="岗位编码" width="120" fixed="left" />
           <el-table-column prop="name" label="岗位名称" width="170" />
-          <el-table-column prop="deptName" label="所属部门" width="130" />
+          <el-table-column prop="deptName" label="所属项目部" width="130" />
           <el-table-column prop="type" label="岗位类型" width="100" align="center">
             <template #default="{ row }">
               <el-tag>{{ row.type }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="deptId" label="部门ID" width="78" align="center" />
+          <el-table-column prop="deptId" label="项目部ID" width="78" align="center" />
           <el-table-column prop="sort" label="排序" width="72" align="center" />
           <el-table-column prop="createTime" label="创建时间" width="112" align="center" />
           <el-table-column label="状态" width="76" align="center">
@@ -186,7 +186,7 @@ const rules = {
         <el-form-item label="岗位编码" prop="code">
           <el-input v-model="form.code" />
         </el-form-item>
-        <el-form-item label="所属部门" prop="deptId">
+        <el-form-item label="所属项目部" prop="deptId">
           <el-select v-model="form.deptId" style="width:100%">
             <el-option v-for="d in deptOptions" :key="d.value" :label="d.label" :value="d.value" />
           </el-select>

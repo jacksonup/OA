@@ -45,7 +45,7 @@ const routes = [
         path: 'department',
         name: 'DepartmentList',
         component: () => import('../views/department/DepartmentList.vue'),
-        meta: { title: '部门管理' }
+        meta: { title: '项目部管理' }
       },
       {
         path: 'position',
