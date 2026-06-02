@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: oa-ui
-        run: npm ci --no-audit --no-fund --progress=false
+        run: npm ci --include=dev --no-audit --no-fund --progress=false
 
       - name: Build
         working-directory: oa-ui
