@@ -1,14 +1,17 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import {
-  Search, RefreshLeft, Plus, Edit, Delete, Setting, Star, MoreFilled,
+  Search, RefreshLeft, Plus, Edit, Delete, Setting, Star,
   Medal, Trophy, School, Phone, UserFilled, Calendar, Postcard, Collection
 } from '@element-plus/icons-vue'
 import { users, departments, positions, addUser, updateUser, deleteUser } from '../../mock/data.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const searchForm = reactive({ keyword: '', projectName: '', status: null })
+const route = useRoute()
 const dialogVisible = ref(false)
+const practiceDialogVisible = ref(false)
 const fieldConfigVisible = ref(false)
 const activeEmployeeModule = ref('master')
 const dialogTitle = ref('')
@@ -44,6 +47,22 @@ function removeEducation(index) {
   form.educations.splice(index, 1)
 }
 const form = reactive({ ...emptyForm })
+const emptyPracticeForm = {
+  userId: null,
+  jobTitle: '',
+  jobTitleProof: '',
+  certificateStatus: '',
+  ministrySupervisor: '',
+  registeredEngineer: '',
+  costEngineer: '',
+  constructor: '',
+  safetyEngineer: '',
+  inspector: '',
+  practiceCertificateScan: '',
+  unregisteredQualificationReason: ''
+}
+const practiceForm = reactive({ ...emptyPracticeForm })
+const practiceRecordMap = reactive({})
 
 const genderOptions = ['男', '女']
 const ethnicityOptions = ['汉族', '蒙古族', '回族', '藏族', '维吾尔族', '苗族', '彝族', '壮族', '布依族', '朝鲜族', '满族', '侗族', '瑶族', '白族', '土家族']
@@ -53,11 +72,11 @@ const educationOptions = ['博士', '硕士', '本科', '大专', '高中', '初
 const empTypeOptions = ['正式员工', '合同制员工', '劳务派遣', '实习生', '兼职']
 const statusOptions = ['离职', '在职']
 const employeeModules = [
-  { key: 'master', title: '员工主档', icon: Star },
-  { key: 'practice', title: '执业相关', icon: Medal },
-  { key: 'project', title: '项目经历', icon: Trophy },
-  { key: 'education', title: '学历信息', icon: School },
-  { key: 'emergency', title: '紧急联系人信息', icon: Phone }
+  { key: 'master', title: '员工主档', path: '/user/master', icon: Star },
+  { key: 'practice', title: '执业相关', path: '/user/practice', icon: Medal },
+  { key: 'project', title: '项目经历', path: '/user/project', icon: Trophy },
+  { key: 'education', title: '学历信息', path: '/user/education', icon: School },
+  { key: 'emergency', title: '紧急联系人信息', path: '/user/emergency', icon: Phone }
 ]
 
 const projectOptions = ['320（临平段）', '330（余杭段）', '340（城北段）', '350（市政段）']
@@ -69,6 +88,9 @@ const certificateOptions = [
   '一建、造价师',
   '安全员、资料员'
 ]
+const practiceTitles = ['高级工程师', '工程师', '总监理工程师', '试验检测师', '一级建造师']
+const practiceCertificateFiles = ['执业证书.pdf', '注册证扫描件.pdf', '职称证书.pdf', '资格证扫描件.pdf']
+const unregisteredReasons = ['待单位注册', '资料补正中', '原单位转出中', '本周期无需注册', '']
 
 const FIELD_STORAGE_KEY = 'oa-employee-master-visible-fields'
 const defaultVisibleFields = [
@@ -125,6 +147,21 @@ const employeeMasterColumns = [
   { key: 'syncStatus', label: '同步状态', width: 112 }
 ]
 
+const practiceColumns = [
+  { key: 'relatedEmployee', label: '关联员工', width: 136, fixed: 'left', icon: UserFilled },
+  { key: 'jobTitle', label: '职称', width: 136 },
+  { key: 'jobTitleProof', label: '职称证明', width: 156, icon: Postcard },
+  { key: 'certificateStatus', label: '持证情况', width: 260 },
+  { key: 'ministrySupervisor', label: '部监', width: 92 },
+  { key: 'registeredEngineer', label: '国注', width: 92 },
+  { key: 'costEngineer', label: '一造', width: 92 },
+  { key: 'constructor', label: '一建', width: 92 },
+  { key: 'safetyEngineer', label: '注安', width: 92 },
+  { key: 'inspector', label: '检师', width: 92 },
+  { key: 'practiceCertificateScan', label: '执业证书扫描件', width: 176, icon: Postcard },
+  { key: 'unregisteredQualificationReason', label: '未注册的执业资格证书及原因', width: 250 }
+]
+
 function getInitialVisibleFields() {
   try {
     const savedFields = JSON.parse(localStorage.getItem(FIELD_STORAGE_KEY) || '[]')
@@ -164,6 +201,9 @@ const positionOptions = computed(() => {
   if (!form.deptId) return positions.map(p => ({ value: p.id, label: p.name }))
   return positions.filter(p => p.deptId === form.deptId).map(p => ({ value: p.id, label: p.name }))
 })
+const userOptions = computed(() => {
+  return employeeMasterRows.value.map(user => ({ value: user.id, label: user.displayName }))
+})
 
 const employeeMasterRows = computed(() => {
   return users.map((user, index) => {
@@ -185,6 +225,48 @@ const employeeMasterRows = computed(() => {
   })
 })
 
+const practiceRows = computed(() => {
+  return employeeMasterRows.value.map((user, index) => {
+    const hasMinistrySupervisor = index % 2 === 0
+    const hasRegisteredEngineer = index % 3 === 0
+    const hasCostEngineer = index % 4 === 0
+    const hasConstructor = index % 3 === 1
+    const hasSafetyEngineer = index % 5 === 0
+    const hasInspector = index % 2 === 1
+    const certificates = [
+      hasMinistrySupervisor ? '部监' : '',
+      hasRegisteredEngineer ? '国注' : '',
+      hasCostEngineer ? '一造' : '',
+      hasConstructor ? '一建' : '',
+      hasSafetyEngineer ? '注安' : '',
+      hasInspector ? '检师' : ''
+    ].filter(Boolean)
+
+    const defaultPractice = {
+      jobTitle: practiceTitles[index % practiceTitles.length],
+      jobTitleProof: index % 4 === 2 ? '待上传' : practiceCertificateFiles[index % practiceCertificateFiles.length],
+      certificateStatus: certificates.join('、') || '暂无',
+      ministrySupervisor: hasMinistrySupervisor ? '已取得' : '',
+      registeredEngineer: hasRegisteredEngineer ? '已注册' : '',
+      costEngineer: hasCostEngineer ? '已注册' : '',
+      constructor: hasConstructor ? '已注册' : '',
+      safetyEngineer: hasSafetyEngineer ? '已注册' : '',
+      inspector: hasInspector ? '已取得' : '',
+      practiceCertificateScan: index % 4 === 2 ? '' : practiceCertificateFiles[(index + 1) % practiceCertificateFiles.length],
+      unregisteredQualificationReason: unregisteredReasons[index % unregisteredReasons.length]
+    }
+    const savedPractice = practiceRecordMap[user.id] || {}
+
+    return {
+      ...user,
+      ...defaultPractice,
+      ...savedPractice,
+      userId: user.id,
+      relatedEmployee: user.displayName
+    }
+  })
+})
+
 const filteredUsers = computed(() => {
   return employeeMasterRows.value.filter(u => {
     const keywordHit = !searchForm.keyword ||
@@ -193,6 +275,21 @@ const filteredUsers = computed(() => {
       u.displayName.includes(searchForm.keyword) ||
       u.phone.includes(searchForm.keyword) ||
       u.idCard.includes(searchForm.keyword)
+    if (!keywordHit) return false
+    if (searchForm.projectName && u.projectName !== searchForm.projectName) return false
+    if (searchForm.status !== null && searchForm.status !== '' && u.status !== searchForm.status) return false
+    return true
+  })
+})
+
+const filteredPracticeRows = computed(() => {
+  return practiceRows.value.filter(u => {
+    const keywordHit = !searchForm.keyword ||
+      u.name.includes(searchForm.keyword) ||
+      u.employeeNo.includes(searchForm.keyword) ||
+      u.relatedEmployee.includes(searchForm.keyword) ||
+      u.jobTitle.includes(searchForm.keyword) ||
+      u.certificateStatus.includes(searchForm.keyword)
     if (!keywordHit) return false
     if (searchForm.projectName && u.projectName !== searchForm.projectName) return false
     if (searchForm.status !== null && searchForm.status !== '' && u.status !== searchForm.status) return false
@@ -210,6 +307,48 @@ function handleReset() {
   searchForm.projectName = ''
   searchForm.status = null
 }
+
+function openAddPractice() {
+  Object.assign(practiceForm, emptyPracticeForm)
+  practiceDialogVisible.value = true
+}
+
+function openEditPractice(row) {
+  Object.assign(practiceForm, {
+    userId: row.userId,
+    jobTitle: row.jobTitle,
+    jobTitleProof: row.jobTitleProof,
+    certificateStatus: row.certificateStatus,
+    ministrySupervisor: row.ministrySupervisor,
+    registeredEngineer: row.registeredEngineer,
+    costEngineer: row.costEngineer,
+    constructor: row.constructor,
+    safetyEngineer: row.safetyEngineer,
+    inspector: row.inspector,
+    practiceCertificateScan: row.practiceCertificateScan,
+    unregisteredQualificationReason: row.unregisteredQualificationReason
+  })
+  practiceDialogVisible.value = true
+}
+
+function savePractice() {
+  if (!practiceForm.userId) {
+    ElMessage.warning('请选择关联员工')
+    return
+  }
+  practiceRecordMap[practiceForm.userId] = { ...practiceForm }
+  practiceDialogVisible.value = false
+  ElMessage.success('保存成功')
+}
+
+watch(
+  () => route.path,
+  path => {
+    const matchedModule = employeeModules.find(item => item.path === path)
+    activeEmployeeModule.value = matchedModule?.key || 'master'
+  },
+  { immediate: true }
+)
 
 function openAdd() {
   dialogTitle.value = '新增用户'
@@ -264,20 +403,6 @@ const rules = {
 <template>
   <div class="page-shell">
     <div class="employee-workspace">
-      <aside class="employee-module-nav">
-        <button
-          v-for="item in employeeModules"
-          :key="item.key"
-          class="employee-module-item"
-          :class="{ active: activeEmployeeModule === item.key }"
-          @click="activeEmployeeModule = item.key"
-        >
-          <el-icon :size="24"><component :is="item.icon" /></el-icon>
-          <span>{{ item.title }}</span>
-          <el-icon v-if="item.key === 'master'" class="module-more" :size="20"><MoreFilled /></el-icon>
-        </button>
-      </aside>
-
       <section class="employee-module-content">
         <template v-if="activeEmployeeModule === 'master'">
           <div class="summary-grid">
@@ -377,6 +502,81 @@ const rules = {
           </el-card>
         </template>
 
+        <template v-else-if="activeEmployeeModule === 'practice'">
+          <el-card class="search-card">
+            <el-form :model="searchForm" inline class="toolbar-form">
+              <el-form-item label="关键字">
+                <el-input v-model="searchForm.keyword" placeholder="员工/职称/证书" clearable style="width:230px" />
+              </el-form-item>
+              <el-form-item label="所属项目">
+                <el-select v-model="searchForm.projectName" placeholder="全部" clearable style="width:160px">
+                  <el-option v-for="project in projectOptions" :key="project" :label="project" :value="project" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="员工状态">
+                <el-select v-model="searchForm.status" placeholder="全部" clearable style="width:120px">
+                  <el-option label="在职" :value="1" />
+                  <el-option label="离职" :value="0" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :icon="Search" round @click="handleSearch">查询</el-button>
+                <el-button :icon="RefreshLeft" round @click="handleReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+
+          <el-card class="table-card">
+            <div class="page-header">
+              <div>
+                <h2>执业相关</h2>
+                <p class="page-subtitle">维护员工职称、执业资格、注册情况与证书扫描件</p>
+              </div>
+              <div class="header-actions">
+                <el-button type="primary" :icon="Plus" round @click="openAddPractice">新增记录</el-button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <el-table :data="filteredPracticeRows" class="data-table practice-table" style="width:100%" max-height="calc(100vh - 270px)" row-class-name="user-row">
+                <el-table-column
+                  v-for="column in practiceColumns"
+                  :key="column.key"
+                  :prop="column.key"
+                  :width="column.width"
+                  :fixed="column.fixed"
+                  align="left"
+                >
+                  <template #header>
+                    <span class="table-header-label">
+                      <el-icon v-if="column.icon" :size="15"><component :is="column.icon" /></el-icon>
+                      {{ column.label }}
+                    </span>
+                  </template>
+                  <template #default="{ row }">
+                    <span v-if="column.key === 'relatedEmployee'" class="cell-name">{{ row.relatedEmployee }}</span>
+                    <span v-else-if="column.key === 'jobTitle'" class="soft-pill yellow">{{ row.jobTitle }}</span>
+                    <span v-else-if="column.key === 'certificateStatus'" class="certificate-text">{{ row.certificateStatus }}</span>
+                    <span v-else-if="['ministrySupervisor', 'registeredEngineer', 'costEngineer', 'constructor', 'safetyEngineer', 'inspector'].includes(column.key)">
+                      <span v-if="row[column.key]" class="soft-pill green">{{ row[column.key] }}</span>
+                      <span v-else class="empty-mark">-</span>
+                    </span>
+                    <span v-else-if="column.key === 'jobTitleProof' || column.key === 'practiceCertificateScan'">
+                      <el-button v-if="row[column.key]" type="primary" link size="small">{{ row[column.key] }}</el-button>
+                      <span v-else class="empty-mark">未上传</span>
+                    </span>
+                    <span v-else>{{ row[column.key] || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="96" fixed="right" align="center">
+                  <template #default="{ row }">
+                    <el-button type="primary" link size="small" :icon="Edit" @click="openEditPractice(row)">编辑</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-card>
+        </template>
+
         <div v-else class="module-placeholder">
           <el-icon :size="42"><component :is="employeeModules.find(item => item.key === activeEmployeeModule)?.icon" /></el-icon>
           <h3>{{ employeeModules.find(item => item.key === activeEmployeeModule)?.title }}</h3>
@@ -405,6 +605,63 @@ const rules = {
       </el-checkbox-group>
       <template #footer>
         <el-button type="primary" round @click="fieldConfigVisible = false">完成</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="practiceDialogVisible" title="执业相关记录" width="760px" destroy-on-close>
+      <el-form :model="practiceForm" label-width="150px" size="default">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="关联员工" required>
+              <el-select v-model="practiceForm.userId" filterable placeholder="请选择员工" style="width:100%">
+                <el-option v-for="user in userOptions" :key="user.value" :label="user.label" :value="user.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="职称">
+              <el-input v-model="practiceForm.jobTitle" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="职称证明">
+              <el-input v-model="practiceForm.jobTitleProof" placeholder="文件名或上传状态" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="持证情况">
+              <el-input v-model="practiceForm.certificateStatus" placeholder="如：部监、国注、检师" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="8"><el-form-item label="部监"><el-input v-model="practiceForm.ministrySupervisor" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="国注"><el-input v-model="practiceForm.registeredEngineer" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="一造"><el-input v-model="practiceForm.costEngineer" /></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="8"><el-form-item label="一建"><el-input v-model="practiceForm.constructor" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="注安"><el-input v-model="practiceForm.safetyEngineer" /></el-form-item></el-col>
+          <el-col :span="8"><el-form-item label="检师"><el-input v-model="practiceForm.inspector" /></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="执业证书扫描件">
+              <el-input v-model="practiceForm.practiceCertificateScan" placeholder="文件名或上传状态" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="未注册资格及原因">
+              <el-input v-model="practiceForm.unregisteredQualificationReason" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button round @click="practiceDialogVisible = false">取消</el-button>
+        <el-button type="primary" round @click="savePractice">保存</el-button>
       </template>
     </el-dialog>
 
@@ -585,71 +842,8 @@ const rules = {
 
 <style scoped>
 .employee-workspace {
-  display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
-  gap: 14px;
+  display: block;
   min-width: 0;
-}
-
-.employee-module-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: calc(100vh - 88px);
-  padding: 10px;
-  border: 1px solid var(--ios-separator);
-  border-radius: var(--ios-radius-lg);
-  background: linear-gradient(180deg, #fbfefb 0%, #f7fbf8 100%);
-  box-shadow: var(--ios-shadow-card);
-}
-
-.employee-module-item {
-  position: relative;
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 20px;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: 56px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: #1f2937;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-align: left;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.employee-module-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.employee-module-item .el-icon {
-  color: #7b8496;
-}
-
-.employee-module-item.active {
-  background: #d8f1dc;
-  color: #078b35;
-}
-
-.employee-module-item.active .el-icon {
-  color: #078b35;
-}
-
-.employee-module-item:hover:not(.active) {
-  background: #eef7f0;
-}
-
-.module-more {
-  justify-self: end;
 }
 
 .employee-module-content {
@@ -706,6 +900,20 @@ const rules = {
 .soft-pill.neutral {
   background: #eef2f7;
   color: #475569;
+}
+
+.certificate-text {
+  display: inline-block;
+  max-width: 238px;
+  overflow: hidden;
+  color: var(--ios-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.empty-mark {
+  color: var(--ios-text-placeholder);
 }
 
 .module-placeholder {
@@ -790,16 +998,4 @@ const rules = {
   color: var(--ios-red);
 }
 
-@media (max-width: 760px) {
-  .employee-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .employee-module-nav {
-    min-height: auto;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(150px, 1fr));
-    overflow-x: auto;
-  }
-}
 </style>

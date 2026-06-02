@@ -1,14 +1,28 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { User, OfficeBuilding, Briefcase, Fold, Expand } from '@element-plus/icons-vue'
+import {
+  User, OfficeBuilding, Briefcase, Fold, Expand,
+  Star, Medal, Trophy, School, Phone
+} from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 const isCollapse = ref(false)
 
 const menuItems = [
-  { path: '/user', title: '用户管理', icon: User },
+  {
+    path: '/user',
+    title: '用户管理',
+    icon: User,
+    children: [
+      { path: '/user/master', title: '员工主档', icon: Star },
+      { path: '/user/practice', title: '执业相关', icon: Medal },
+      { path: '/user/project', title: '项目经历', icon: Trophy },
+      { path: '/user/education', title: '学历信息', icon: School },
+      { path: '/user/emergency', title: '紧急联系人信息', icon: Phone }
+    ]
+  },
   { path: '/department', title: '部门管理', icon: OfficeBuilding },
   { path: '/position', title: '岗位管理', icon: Briefcase }
 ]
@@ -34,12 +48,25 @@ function onMenuSelect(path) {
         background-color="transparent"
         text-color="var(--ios-text-secondary)"
         active-text-color="var(--ios-blue)"
+        :default-openeds="['/user']"
         @select="onMenuSelect"
       >
-        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
-          <el-icon :size="18"><component :is="item.icon" /></el-icon>
-          <template #title>{{ item.title }}</template>
-        </el-menu-item>
+        <template v-for="item in menuItems" :key="item.path">
+          <el-sub-menu v-if="item.children" :index="item.path">
+            <template #title>
+              <el-icon :size="18"><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </template>
+            <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
+              <el-icon :size="16"><component :is="child.icon" /></el-icon>
+              <template #title>{{ child.title }}</template>
+            </el-menu-item>
+          </el-sub-menu>
+          <el-menu-item v-else :index="item.path">
+            <el-icon :size="18"><component :is="item.icon" /></el-icon>
+            <template #title>{{ item.title }}</template>
+          </el-menu-item>
+        </template>
       </el-menu>
 
       <div v-if="!isCollapse" class="sidebar-footer">

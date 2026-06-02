@@ -5,13 +5,41 @@ const routes = [
   {
     path: '/',
     component: MainLayout,
-    redirect: '/user',
+    redirect: '/user/master',
     children: [
       {
         path: 'user',
+        redirect: '/user/master'
+      },
+      {
+        path: 'user/master',
         name: 'UserList',
         component: () => import('../views/user/UserList.vue'),
-        meta: { title: '用户管理' }
+        meta: { title: '员工主档' }
+      },
+      {
+        path: 'user/practice',
+        name: 'UserPractice',
+        component: () => import('../views/user/UserList.vue'),
+        meta: { title: '执业相关' }
+      },
+      {
+        path: 'user/project',
+        name: 'UserProject',
+        component: () => import('../views/user/UserList.vue'),
+        meta: { title: '项目经历' }
+      },
+      {
+        path: 'user/education',
+        name: 'UserEducation',
+        component: () => import('../views/user/UserList.vue'),
+        meta: { title: '学历信息' }
+      },
+      {
+        path: 'user/emergency',
+        name: 'UserEmergency',
+        component: () => import('../views/user/UserList.vue'),
+        meta: { title: '紧急联系人信息' }
       },
       {
         path: 'department',

@@ -325,6 +325,33 @@ body {
   color: var(--ios-blue) !important;
   font-weight: 500;
 }
+.el-sub-menu {
+  margin: 2px 10px;
+  border-radius: var(--ios-radius);
+}
+.el-sub-menu__title {
+  height: 48px !important;
+  border-radius: var(--ios-radius);
+  color: var(--ios-text-secondary) !important;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.el-sub-menu__title:hover {
+  background: rgba(0, 122, 255, 0.08) !important;
+  color: var(--ios-blue) !important;
+}
+.el-sub-menu .el-menu-item {
+  height: 40px;
+  margin: 2px 0 2px 14px;
+  padding-left: 18px !important;
+  font-size: 13px;
+}
+.el-menu--collapse .el-sub-menu {
+  margin: 2px 10px;
+}
+.el-menu--collapse .el-sub-menu__title {
+  padding: 0 16px !important;
+}
 
 /* --- Message box --- */
 .el-message-box {
